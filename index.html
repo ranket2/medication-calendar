@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>服薬記録カレンダー</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;color:#243247;background:#f3f6fb}*{box-sizing:border-box}body{margin:0;padding:20px 12px}.app{max-width:780px;margin:auto}h1{font-size:1.5rem;margin:4px 0 18px;text-align:center}.panel{background:white;border-radius:16px;padding:18px;box-shadow:0 3px 15px #18365a12;margin-bottom:18px}.month-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:16px}.month-nav h2{font-size:1.2rem;margin:0;text-align:center}.nav-btn,.today-btn{border:1px solid #ccd8e8;background:#fff;border-radius:9px;padding:9px 12px;color:#244a7b;font-weight:700;cursor:pointer}.today-btn{display:block;margin:14px auto 0}.weekdays,.calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}.weekday{text-align:center;font-size:.85rem;color:#64748b;padding:6px 0}.weekday:first-child{color:#ce5063}.weekday:last-child{color:#3778bf}.day{min-height:83px;padding:7px 2px 5px;border:1px solid #e1e7ef;background:#fff;border-radius:9px;text-align:center;cursor:pointer;display:flex;flex-direction:column;gap:5px;align-items:center}.day:hover{background:#f0f6ff}.day.selected{border:2px solid #2877d4;background:#eaf3ff;padding:6px 1px 4px}.day.today .number{background:#2675ce;color:white;border-radius:50%;min-width:25px;line-height:25px}.number{font-weight:700;font-size:.93rem;min-width:25px;line-height:25px}.day:nth-child(7n+1) .number{color:#c04c60}.day:nth-child(7n) .number{color:#3778bf}.day.today .number{color:#fff}.meds{display:flex;flex-direction:column;gap:1px;font-size:.73rem;line-height:1.3}.med{color:#c5cbd4;font-weight:400}.med.done{color:#1769c5;font-weight:800}.empty{min-height:83px}.detail-title{font-size:1.2rem;margin:0 0 16px}.checks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.check-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;border:1px solid #e0e5ed;border-radius:12px;padding:18px 6px;cursor:pointer;background:#f8fafc;min-height:118px}.check-card.checked{background:#e6f1ff;border-color:#7aaceb;color:#145db2}.check-card input{width:24px;height:24px;accent-color:#176fc8;cursor:pointer}.check-card .name{font-weight:700;font-size:1.12rem}.time{font-size:.78rem;color:#64748b;min-height:1.2em;text-align:center}.checked .time{color:#1769c5}.note{font-size:.8rem;color:#64748b;line-height:1.6;margin:15px 0 0}@media(max-width:440px){body{padding:12px 7px}.panel{padding:12px}.calendar,.weekdays{gap:3px}.day,.empty{min-height:77px}.meds{font-size:.68rem}.number{font-size:.85rem}.check-card{padding:14px 3px}.month-nav h2{font-size:1.05rem}.nav-btn{padding:8px}}
+</style>
+</head>
+<body>
+<main class="app">
+<h1>服薬記録カレンダー</h1>
+<section class="panel" aria-label="月間カレンダー">
+<div class="month-nav"><button class="nav-btn" id="prev" type="button">◀ 前月</button><h2 id="month"></h2><button class="nav-btn" id="next" type="button">翌月 ▶</button></div>
+<div class="weekdays"><div class="weekday">日</div><div class="weekday">月</div><div class="weekday">火</div><div class="weekday">水</div><div class="weekday">木</div><div class="weekday">金</div><div class="weekday">土</div></div>
+<div class="calendar" id="calendar"></div>
+<button class="today-btn" id="today" type="button">今日に戻る</button>
+</section>
+<section class="panel" aria-label="服薬状況の登録">
+<h2 class="detail-title" id="selectedDate"></h2>
+<div class="checks" id="checks"></div>
+<p class="note">チェックすると現在の時刻を記録し、自動保存します。チェックを外すと記録した時刻も削除されます。データはこのブラウザ内に保存されます。</p>
+</section>
+</main>
+<script>
+(()=>{'use strict';
+const KEY='medication-calendar-v1';
+const periods=['朝','昼','晩'];
+const weekdays=['日','月','火','水','木','金','土'];
+const now=new Date();
+let selected=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+let displayed=new Date(now.getFullYear(),now.getMonth(),1);
+let records={};
+try{const parsed=JSON.parse(localStorage.getItem(KEY)||'{}');if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))records=parsed;}catch(e){console.warn('保存済みデータを読み込めませんでした',e);}
+const pad=n=>String(n).padStart(2,'0');
+const key=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(records));return true;}catch(e){alert('記録を保存できませんでした。ブラウザの保存設定や空き容量をご確認ください。');return false;}};
+const get=(d,p)=>records[key(d)]?.[p]||null;
+function renderCalendar(){
+ document.getElementById('month').textContent=`${displayed.getFullYear()}年${displayed.getMonth()+1}月`;
+ const root=document.getElementById('calendar');root.replaceChildren();
+ const y=displayed.getFullYear(),m=displayed.getMonth();
+ const offset=new Date(y,m,1).getDay();
+ const days=new Date(y,m+1,0).getDate();
+ for(let i=0;i<offset;i++){const empty=document.createElement('div');empty.className='empty';root.append(empty);}
+ for(let n=1;n<=days;n++){
+  const d=new Date(y,m,n),button=document.createElement('button');button.type='button';button.className='day';
+  if(key(d)===key(selected))button.classList.add('selected');
+  if(key(d)===key(new Date()))button.classList.add('today');
+  button.setAttribute('aria-label',`${m+1}月${n}日、服薬状況を表示`);
+  const number=document.createElement('span');number.className='number';number.textContent=n;button.append(number);
+  const meds=document.createElement('span');meds.className='meds';
+  for(const p of periods){const span=document.createElement('span');span.className='med'+(get(d,p)?' done':'');span.textContent=p;meds.append(span);}
+  button.append(meds);button.addEventListener('click',()=>{selected=d;render();});root.append(button);
+ }
+}
+function renderDetail(){
+ document.getElementById('selectedDate').textContent=`${selected.getFullYear()}年${selected.getMonth()+1}月${selected.getDate()}日（${weekdays[selected.getDay()]}）の服薬状況`;
+ const root=document.getElementById('checks');root.replaceChildren();
+ for(const p of periods){
+  const value=get(selected,p),label=document.createElement('label');label.className='check-card'+(value?' checked':'');
+  const input=document.createElement('input');input.type='checkbox';input.checked=!!value;input.setAttribute('aria-label',`${p}の服薬`);
+  const name=document.createElement('span');name.className='name';name.textContent=p;
+  const time=document.createElement('span');time.className='time';time.textContent=value?`記録時刻 ${value}`:'未服薬';
+  input.addEventListener('change',()=>{
+   const k=key(selected),before=JSON.stringify(records);
+   if(input.checked){if(!records[k])records[k]={};const t=new Date();records[k][p]=`${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;}
+   else if(records[k]){delete records[k][p];if(Object.keys(records[k]).length===0)delete records[k];}
+   if(!save())records=JSON.parse(before);
+   render();
+  });
+  label.append(input,name,time);root.append(label);
+ }
+}
+function render(){renderCalendar();renderDetail();}
+document.getElementById('prev').addEventListener('click',()=>{displayed=new Date(displayed.getFullYear(),displayed.getMonth()-1,1);renderCalendar();});
+document.getElementById('next').addEventListener('click',()=>{displayed=new Date(displayed.getFullYear(),displayed.getMonth()+1,1);renderCalendar();});
+document.getElementById('today').addEventListener('click',()=>{const d=new Date();selected=new Date(d.getFullYear(),d.getMonth(),d.getDate());displayed=new Date(d.getFullYear(),d.getMonth(),1);render();});
+render();
+})();
+</script>
+</body>
+</html>
